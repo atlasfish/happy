@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
     buildSessionChildEnvironment,
+    codexForkThreadIdForSpawn,
     sanitizeSessionEnvironment,
     SESSION_SCOPED_ENV_KEYS,
     sessionEnvironmentKeysToUnset,
@@ -15,6 +16,14 @@ function contaminatedEnvironment(): NodeJS.ProcessEnv {
 }
 
 describe('sessionEnvironment', () => {
+    it('only enables full Codex history replay for a fork with parent lineage', () => {
+        expect(codexForkThreadIdForSpawn({ resumeCodexThreadId: 'history-thread' })).toBeUndefined();
+        expect(codexForkThreadIdForSpawn({
+            resumeCodexThreadId: 'fork-thread',
+            parentSessionId: 'parent-session',
+        })).toBe('fork-thread');
+    });
+
     it('removes all inherited session-scoped values without mutating the source', () => {
         const source = contaminatedEnvironment();
 

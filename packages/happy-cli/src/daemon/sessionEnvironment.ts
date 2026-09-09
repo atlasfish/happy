@@ -18,6 +18,13 @@ export const SESSION_SCOPED_ENV_KEYS = [
     'CODEX_THREAD_ID',
 ] as const;
 
+export function codexForkThreadIdForSpawn(options: {
+    resumeCodexThreadId?: string;
+    parentSessionId?: string;
+}): string | undefined {
+    return options.parentSessionId ? options.resumeCodexThreadId : undefined;
+}
+
 /**
  * Remove session-scoped state inherited from a parent process without
  * modifying the source environment.
