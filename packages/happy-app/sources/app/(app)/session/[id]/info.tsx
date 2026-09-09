@@ -99,6 +99,7 @@ function SessionInfoContent({ session }: { session: Session }) {
         forking,
         forkSession,
         openDuplicateSheet,
+        renameSession,
         resumeSession,
         resumeSessionSubtitle,
     } = useSessionQuickActions(session);
@@ -257,6 +258,12 @@ function SessionInfoContent({ session }: { session: Session }) {
                             onPress={resumeSession}
                         />
                     )}
+                    <Item
+                        title={t('common.rename')}
+                        subtitle="Set a custom title for this session"
+                        icon={<Ionicons name="pencil-outline" size={29} color="#007AFF" />}
+                        onPress={renameSession}
+                    />
                     {canFork && (
                         <Item
                             title={t('session.forkAction')}

@@ -7,7 +7,12 @@ require('../patches/expose-pierre-diffs-style.cjs');
 require('../patches/force-preact-cjs.cjs');
 require('../patches/fix-pierre-trees-preact-hooks.cjs');
 require('../patches/fix-react-native-audio-api-size-t.cjs');
+<<<<<<< HEAD
 require('../patches/fix-flash-list-web-inversion.cjs').patchFlashListWeb();
+=======
+require('../patches/fix-react-native-gradle-foojay.cjs');
+require('../patches/fix-react-native-libsodium-cmake.cjs');
+>>>>>>> 7b230558 (feat: add mobile Codex session controls)
 
 if (process.env.SKIP_HAPPY_WIRE_BUILD === '1') {
   console.log('[postinstall] SKIP_HAPPY_WIRE_BUILD=1, skipping @slopus/happy-wire build');

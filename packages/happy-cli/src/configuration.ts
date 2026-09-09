@@ -5,7 +5,7 @@
  * Environment files should be loaded using Node's --env-file flag
  */
 
-import { existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import packageJson from '../package.json'
@@ -23,6 +23,8 @@ class Configuration {
   public readonly daemonStateFile: string
   public readonly daemonLockFile: string
   public readonly sessionsFile: string
+  public readonly customConfigFile: string
+  public readonly codexResumeBackfillTurns: number
   public readonly currentCliVersion: string
 
   public readonly isExperimentalEnabled: boolean
@@ -49,6 +51,15 @@ class Configuration {
     this.daemonStateFile = join(this.happyHomeDir, 'daemon.state.json')
     this.daemonLockFile = join(this.happyHomeDir, 'daemon.state.json.lock')
     this.sessionsFile = join(this.happyHomeDir, 'sessions.json')
+    this.customConfigFile = join(this.happyHomeDir, 'custom_config.json')
+
+    if (!existsSync(this.happyHomeDir)) {
+      mkdirSync(this.happyHomeDir, { recursive: true })
+    }
+    if (!existsSync(this.customConfigFile)) {
+      writeFileSync(this.customConfigFile, JSON.stringify({ codex: { resumeBackfillTurns: 3 } }, null, 2) + '\n', 'utf8')
+    }
+    this.codexResumeBackfillTurns = readCodexResumeBackfillTurnsSync(this.customConfigFile)
 
     // URL precedence (both): HAPPY_*_URL env > settings.<key> > default.
     // Settings are read sync here (avoid circular import with persistence.ts).
@@ -80,13 +91,25 @@ class Configuration {
       console.log('\x1b[33m🔧 DEV MODE\x1b[0m - Data: ' + this.happyHomeDir)
     }
 
-    if (!existsSync(this.happyHomeDir)) {
-      mkdirSync(this.happyHomeDir, { recursive: true })
-    }
     // Ensure directories exist
     if (!existsSync(this.logsDir)) {
       mkdirSync(this.logsDir, { recursive: true })
     }
+  }
+}
+
+export function parseCodexResumeBackfillTurns(value: unknown): number {
+  const turns = (value as { codex?: { resumeBackfillTurns?: unknown } } | null)?.codex?.resumeBackfillTurns
+  return Number.isInteger(turns) && (turns as number) >= 0 && (turns as number) <= 50
+    ? turns as number
+    : 3
+}
+
+function readCodexResumeBackfillTurnsSync(customConfigFile: string): number {
+  try {
+    return parseCodexResumeBackfillTurns(JSON.parse(readFileSync(customConfigFile, 'utf8')))
+  } catch {
+    return 3
   }
 }
 

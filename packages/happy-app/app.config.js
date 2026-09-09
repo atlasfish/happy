@@ -135,6 +135,9 @@ export default {
         },
         plugins: [
             require("./plugins/withEinkCompatibility.js"),
+            ...(variant === 'preview'
+                ? [require("./plugins/withPreviewSigning.js")]
+                : []),
             [
                 "expo-router",
                 {
