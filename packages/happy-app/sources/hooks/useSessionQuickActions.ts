@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useHappyAction } from '@/hooks/useHappyAction';
 import { useNavigateToSession } from '@/hooks/useNavigateToSession';
 import { Modal } from '@/modal';
-import { machineResumeSession, sessionArchive, sessionKill, sessionSetAgentModes, forkAndSpawn, type ForkSource } from '@/sync/ops';
+import { machineResumeSession, sessionArchive, sessionKill, sessionRename, sessionSetAgentModes, forkAndSpawn, type ForkSource } from '@/sync/ops';
 import { maybeCleanupWorktree } from '@/hooks/useWorktreeCleanup';
 import { storage, useLocalSetting, useMachine, useSetting } from '@/sync/storage';
 import { Machine, Session } from '@/sync/storageTypes';
@@ -164,6 +164,28 @@ export function useSessionQuickActions(
         router.push(`/session/${session.id}/info`);
     }, [router, session.id]);
 
+    const renameSession = React.useCallback(() => {
+        void (async () => {
+            const title = await Modal.prompt(
+                'Rename Session',
+                'Enter a title for this session.',
+                {
+                    defaultValue: session.metadata?.summary?.text ?? '',
+                    placeholder: 'Session title',
+                    cancelText: t('common.cancel'),
+                    confirmText: t('common.rename'),
+                },
+            );
+            if (title === null) return;
+            try {
+                await sessionRename(session.id, title);
+                await sync.refreshSessions();
+            } catch (error) {
+                Modal.alert(t('common.error'), error instanceof Error ? error.message : 'Failed to rename session');
+            }
+        })();
+    }, [session.id, session.metadata?.summary?.text]);
+
     const copySessionMetadata = React.useCallback(() => {
         void (async () => {
             const copied = await copySessionMetadataToClipboard(session);
@@ -292,6 +314,7 @@ export function useSessionQuickActions(
     const actionItems = React.useMemo<SessionActionItem[]>(() => {
         const items: SessionActionItem[] = [
             { id: 'details', icon: 'information-circle-outline', label: t('profile.details'), onPress: openDetails },
+            { id: 'rename', icon: 'pencil-outline', label: t('common.rename'), onPress: renameSession },
         ];
 
         if (resumeAvailability.canShowResume) {
@@ -321,6 +344,7 @@ export function useSessionQuickActions(
         forkSession,
         openDetails,
         openDuplicateSheet,
+        renameSession,
         resumeAvailability.canShowResume,
         resumeSession,
     ]);
@@ -351,6 +375,7 @@ export function useSessionQuickActions(
         forking,
         openDetails,
         openDuplicateSheet,
+        renameSession,
         resumeSession,
         resumeSessionSubtitle: resumeAvailability.subtitle,
         resumingSession,

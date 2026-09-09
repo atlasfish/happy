@@ -312,6 +312,7 @@ export type Metadata = {
     text: string,
     updatedAt: number
   },
+  titleSource?: 'auto' | 'manual',
   machineId?: string,
   gitBranch?: string,
   claudeSessionId?: string, // Claude Code session ID

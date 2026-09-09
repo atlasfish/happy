@@ -27,6 +27,8 @@ import type {
     ForkConversationResponse,
     ReadConversationParams,
     ReadConversationResponse,
+    ThreadListParams,
+    ThreadListResponse,
     RollbackConversationParams,
     RollbackConversationResponse,
     InjectItemsParams,
@@ -906,6 +908,19 @@ export class CodexAppServerClient {
             includeTurns: opts.includeTurns ?? true,
         };
         return await this.request('thread/read', params) as ReadConversationResponse;
+    }
+
+    async listThreads(opts: { cursor?: string; limit?: number; searchTerm?: string } = {}): Promise<ThreadListResponse> {
+        const params: ThreadListParams = {
+            cursor: opts.cursor ?? null,
+            limit: opts.limit ?? 50,
+            sortKey: 'updated_at',
+            sortDirection: 'desc',
+            archived: false,
+            useStateDbOnly: true,
+            searchTerm: opts.searchTerm ?? null,
+        };
+        return await this.request('thread/list', params) as ThreadListResponse;
     }
 
     async rollbackThread(opts: {

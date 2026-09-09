@@ -296,6 +296,26 @@ export class ApiMachineClient {
             });
         });
 
+        this.rpcHandlerManager.registerHandler('codex-list-threads', async (params: any) => {
+            const limit = typeof params?.limit === 'number' ? Math.min(Math.max(Math.trunc(params.limit), 1), 100) : 50;
+            const cursor = typeof params?.cursor === 'string' ? params.cursor : undefined;
+            const searchTerm = typeof params?.searchTerm === 'string' ? params.searchTerm : undefined;
+            return withCodexAppServerClient(async (client) => {
+                const result = await client.listThreads({ limit, cursor, searchTerm });
+                return {
+                    type: 'success',
+                    threads: result.data.map((thread) => ({
+                        id: thread.id,
+                        name: typeof thread.name === 'string' ? thread.name : null,
+                        preview: typeof thread.preview === 'string' ? thread.preview : '',
+                        cwd: typeof thread.cwd === 'string' ? thread.cwd : '',
+                        updatedAt: typeof thread.updatedAt === 'number' ? thread.updatedAt : 0,
+                    })),
+                    nextCursor: result.nextCursor,
+                };
+            });
+        });
+
         this.rpcHandlerManager.registerHandler('codex-duplicate-thread', async (params: any) => {
             const directory = requireNonEmptyString(params?.directory, 'directory');
             const codexThreadId = requireNonEmptyString(params?.codexThreadId, 'codexThreadId');

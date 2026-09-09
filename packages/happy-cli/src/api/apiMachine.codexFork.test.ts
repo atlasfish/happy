@@ -6,6 +6,7 @@ const { codexClientMethods } = vi.hoisted(() => ({
         disconnect: vi.fn(),
         forkThread: vi.fn(),
         readThread: vi.fn(),
+        listThreads: vi.fn(),
         rollbackThread: vi.fn(),
         injectItems: vi.fn(),
     },
@@ -125,6 +126,35 @@ describe('ApiMachineClient Codex fork RPCs', () => {
         expect(codexClientMethods.readThread).toHaveBeenCalledWith({
             threadId: 'thread-source',
             includeTurns: true,
+        });
+    });
+
+    it('lists normalized Codex history without sending turns to the app', async () => {
+        codexClientMethods.listThreads.mockResolvedValue({
+            data: [{
+                id: 'thread-1', name: 'Saved title', preview: 'hello', cwd: '/tmp/project',
+                updatedAt: 123, turns: [{ id: 'turn-1', items: [] }],
+            }],
+            nextCursor: 'next-page',
+        });
+        const { ApiMachineClient } = await import('./apiMachine');
+        const client = new ApiMachineClient('token', machineClient());
+        client.setRPCHandlers({ spawnSession: vi.fn(), stopSession: vi.fn(), requestShutdown: vi.fn() });
+
+        const result = await handlersFrom(client).get('machine-1:codex-list-threads')?.({
+            limit: 20,
+            cursor: 'cursor-1',
+        });
+
+        expect(codexClientMethods.listThreads).toHaveBeenCalledWith({
+            limit: 20,
+            cursor: 'cursor-1',
+            searchTerm: undefined,
+        });
+        expect(result).toEqual({
+            type: 'success',
+            threads: [{ id: 'thread-1', name: 'Saved title', preview: 'hello', cwd: '/tmp/project', updatedAt: 123 }],
+            nextCursor: 'next-page',
         });
     });
 

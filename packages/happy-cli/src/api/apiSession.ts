@@ -713,12 +713,13 @@ export class ApiSessionClient extends EventEmitter {
 
         // Update metadata with summary if this is a summary message
         if (body.type === 'summary' && 'summary' in body && 'leafUuid' in body) {
-            this.updateMetadata((metadata) => ({
+            this.updateMetadata((metadata) => metadata.titleSource === 'manual' ? metadata : ({
                 ...metadata,
                 summary: {
                     text: body.summary,
                     updatedAt: Date.now()
-                }
+                },
+                titleSource: 'auto',
             }));
         }
     }

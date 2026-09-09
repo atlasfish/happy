@@ -105,8 +105,25 @@ export type Thread = {
     forkedFromId?: string | null;
     path?: string | null;
     cwd?: string;
+    name?: string | null;
     turns?: ThreadTurn[];
     [key: string]: unknown;
+};
+
+export type ThreadListParams = {
+    cursor?: string | null;
+    limit?: number | null;
+    sortKey?: 'created_at' | 'updated_at' | null;
+    sortDirection?: 'asc' | 'desc' | null;
+    archived?: boolean | null;
+    useStateDbOnly?: boolean;
+    searchTerm?: string | null;
+};
+
+export type ThreadListResponse = {
+    data: Thread[];
+    nextCursor: string | null;
+    backwardsCursor: string | null;
 };
 
 export type ThreadGoalStatus = "active" | "paused" | "blocked" | "usageLimited" | "budgetLimited" | "complete";

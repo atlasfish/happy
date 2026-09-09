@@ -336,6 +336,20 @@ export default function MachineDetailScreen() {
                     </ItemGroup>
                 )}
 
+                <ItemGroup title="Codex">
+                    <Item
+                        title="Codex History"
+                        subtitle={machineOnline
+                            ? 'Browse and resume local Codex threads'
+                            : 'Start the Happy daemon to browse history'}
+                        onPress={machineOnline && metadata?.cliAvailability?.codex
+                            ? () => router.push(`/machine/${machineId}/codex-threads` as any)
+                            : undefined}
+                        disabled={!machineOnline || !metadata?.cliAvailability?.codex}
+                        rightElement={<Ionicons name="time-outline" size={20} color={theme.colors.textSecondary} />}
+                    />
+                </ItemGroup>
+
                 {/* Recent sessions */}
                 {previousSessions.length > 0 && (
                     <ItemGroup title={t('tabs.sessions')}>

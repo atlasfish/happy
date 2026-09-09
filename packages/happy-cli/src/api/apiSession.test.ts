@@ -375,6 +375,28 @@ describe('ApiSessionClient v3 messages API migration', () => {
         expect(typeof (sessionUser as any).content.time).toBe('number');
     });
 
+    it('does not overwrite a manually renamed session with an automatic summary', () => {
+        const client = new ApiSessionClient('fake-token', makeSession() as any);
+        let metadataHandler: ((metadata: any) => any) | undefined;
+        vi.spyOn(client, 'updateMetadata').mockImplementation((handler) => {
+            metadataHandler = handler;
+        });
+
+        client.sendClaudeSessionMessage({
+            type: 'summary',
+            summary: 'Automatic Codex title',
+            leafUuid: 'summary-1',
+        } as any);
+
+        const manual = {
+            ...(makeSession().metadata),
+            summary: { text: 'My title', updatedAt: 1 },
+            titleSource: 'manual',
+        };
+        expect(metadataHandler).toBeDefined();
+        expect(metadataHandler!(manual)).toBe(manual);
+    });
+
     it('uploads local Claude transcript image blocks and sends file before user text', async () => {
         const client = new ApiSessionClient('fake-token', session);
         const pngBytes = new Uint8Array([0x89, 0x50, 0x4E, 0x47, 0x01, 0x02, 0x03]);

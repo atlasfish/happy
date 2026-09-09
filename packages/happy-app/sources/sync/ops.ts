@@ -248,6 +248,18 @@ export type CodexListRewindPointsResult =
     | { type: 'success'; points: CodexRewindPoint[] }
     | { type: 'error'; errorMessage: string };
 
+export interface CodexHistoricalThread {
+    id: string;
+    name: string | null;
+    preview: string;
+    cwd: string;
+    updatedAt: number;
+}
+
+export type CodexListThreadsResult =
+    | { type: 'success'; threads: CodexHistoricalThread[]; nextCursor: string | null }
+    | { type: 'error'; errorMessage: string };
+
 export interface ResumeSessionOptions {
     machineId: string;
     sessionId: string;
@@ -489,6 +501,30 @@ export async function codexListRewindPoints(
         return {
             type: 'error',
             errorMessage: error instanceof Error ? error.message : 'Failed to list Codex rewind points',
+        };
+    }
+}
+
+export async function codexListThreads(options: {
+    machineId: string;
+    cursor?: string;
+    limit?: number;
+    searchTerm?: string;
+}): Promise<CodexListThreadsResult> {
+    try {
+        return await apiSocket.machineRPC<CodexListThreadsResult, {
+            cursor?: string;
+            limit?: number;
+            searchTerm?: string;
+        }>(options.machineId, 'codex-list-threads', {
+            cursor: options.cursor,
+            limit: options.limit,
+            searchTerm: options.searchTerm,
+        });
+    } catch (error) {
+        return {
+            type: 'error',
+            errorMessage: error instanceof Error ? error.message : 'Failed to list Codex threads',
         };
     }
 }
@@ -741,6 +777,43 @@ async function sessionUpdateAgentModesMetadata(
     }
 
     throw new Error(`Failed to update session metadata after ${maxRetries} retries due to version conflicts`);
+}
+
+export async function sessionRename(sessionId: string, title: string, maxRetries: number = 3): Promise<void> {
+    const trimmed = title.trim();
+    if (!trimmed) throw new Error('Session title cannot be empty');
+
+    const encryption = sync.encryption.getSessionEncryption(sessionId);
+    const session = storage.getState().sessions[sessionId];
+    if (!encryption || !session?.metadata) {
+        throw new Error(`Session ${sessionId} is not ready for metadata updates`);
+    }
+
+    let currentVersion = session.metadataVersion;
+    let currentMetadata: Record<string, unknown> = { ...session.metadata };
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+        const nextMetadata = {
+            ...currentMetadata,
+            summary: { text: trimmed, updatedAt: Date.now() },
+            titleSource: 'manual',
+        };
+        const encrypted = await encryption.encryptRaw(nextMetadata);
+        const result = await apiSocket.emitWithAck<{
+            result: 'success' | 'version-mismatch' | 'error';
+            version?: number;
+            metadata?: string;
+        }>('update-metadata', { sid: sessionId, metadata: encrypted, expectedVersion: currentVersion });
+        if (result.result === 'success') return;
+        if (result.result === 'version-mismatch' && result.version !== undefined && result.metadata) {
+            currentVersion = result.version;
+            const latest = await encryption.decryptRaw(result.metadata);
+            if (!latest) throw new Error('Failed to decrypt latest session metadata');
+            currentMetadata = latest as Record<string, unknown>;
+            continue;
+        }
+        throw new Error('Failed to rename session');
+    }
+    throw new Error(`Failed to rename session after ${maxRetries} retries due to version conflicts`);
 }
 
 /**

@@ -119,6 +119,7 @@ export const MetadataSchema = z.object({
         text: z.string(),
         updatedAt: z.number()
     }).optional(),
+    titleSource: z.enum(['auto', 'manual']).optional(),
     /**
      * When the session last did something a person would call activity: the
      * newest visible user message, visible agent text, or user-facing question.
