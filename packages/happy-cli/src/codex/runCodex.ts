@@ -826,6 +826,7 @@ export async function runCodex(opts: {
         await client.connect();
         logger.debug('[codex]: client.connect done');
 
+        const forkCodexThreadId = process.env.HAPPY_FORK_CODEX_THREAD_ID;
         if (opts.resumeThreadId) {
             await resumeExistingThread({
                 client,
@@ -836,12 +837,14 @@ export async function runCodex(opts: {
                 mcpServers,
                 // Side chats start empty — keep the resume notice out of the UI.
                 announce: !isSideChat,
+                // Forks replay their complete source thread below. Avoid first
+                // replaying the configurable resume window as a duplicate.
+                backfillTurns: forkCodexThreadId ? 0 : undefined,
             });
             first = false;
             appendSystemPromptInjected = true;
         }
 
-        const forkCodexThreadId = process.env.HAPPY_FORK_CODEX_THREAD_ID;
         if (!reconnectSessionId && forkCodexThreadId) {
             // Side chats inherit the forked thread's context inside the model
             // (thread/fork copies it), but we deliberately do NOT replay the

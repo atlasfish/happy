@@ -30,6 +30,7 @@ import { detectResumeSupport } from '@/resume/localHappyAgentAuth';
 import { encodeBase64, decodeBase64, decrypt } from '@/api/encryption';
 import {
   buildSessionChildEnvironment,
+  codexForkThreadIdForSpawn,
   sanitizeSessionEnvironment,
   wrapTmuxCommandWithSessionEnvironmentSanitizer,
 } from './sessionEnvironment';
@@ -353,8 +354,12 @@ export async function startDaemon(): Promise<void> {
         if (options.resumeClaudeSessionId) {
           extraEnv.HAPPY_FORK_CLAUDE_SESSION_ID = options.resumeClaudeSessionId;
         }
-        if (options.resumeCodexThreadId) {
-          extraEnv.HAPPY_FORK_CODEX_THREAD_ID = options.resumeCodexThreadId;
+        // A plain history resume should only replay the configured recent turns.
+        // Full-thread replay is reserved for a real fork/duplicate, which carries
+        // parent-session lineage.
+        const codexForkThreadId = codexForkThreadIdForSpawn(options);
+        if (codexForkThreadId) {
+          extraEnv.HAPPY_FORK_CODEX_THREAD_ID = codexForkThreadId;
         }
         logger.debug(`[DAEMON RUN] Environment variable keys (before expansion) (${Object.keys(extraEnv).length}): ${Object.keys(extraEnv).join(', ')}`);
 
