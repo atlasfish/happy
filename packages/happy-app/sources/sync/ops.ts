@@ -260,6 +260,23 @@ export type CodexListThreadsResult =
     | { type: 'success'; threads: CodexHistoricalThread[]; nextCursor: string | null }
     | { type: 'error'; errorMessage: string };
 
+export interface CodexThreadWriterOwner {
+    pid: number;
+    processName: string;
+    appPid: number;
+    appName: string;
+    canForceClose: boolean;
+}
+
+export type CodexThreadWriterStatus =
+    | { type: 'available' }
+    | { type: 'locked'; owners: CodexThreadWriterOwner[] }
+    | { type: 'error'; errorMessage: string };
+
+export type CodexForceCloseWriterResult =
+    | { type: 'success'; owners: CodexThreadWriterOwner[] }
+    | { type: 'error'; errorMessage: string };
+
 export interface ResumeSessionOptions {
     machineId: string;
     sessionId: string;
@@ -525,6 +542,45 @@ export async function codexListThreads(options: {
         return {
             type: 'error',
             errorMessage: error instanceof Error ? error.message : 'Failed to list Codex threads',
+        };
+    }
+}
+
+export async function codexInspectThreadWriter(options: {
+    machineId: string;
+    directory: string;
+    codexThreadId: string;
+}): Promise<CodexThreadWriterStatus> {
+    try {
+        return await apiSocket.machineRPC<CodexThreadWriterStatus, {
+            directory: string;
+            codexThreadId: string;
+        }>(options.machineId, 'codex-inspect-thread-writer', {
+            directory: options.directory,
+            codexThreadId: options.codexThreadId,
+        });
+    } catch (error) {
+        return {
+            type: 'error',
+            errorMessage: error instanceof Error ? error.message : 'Failed to inspect the Codex thread writer',
+        };
+    }
+}
+
+export async function codexForceCloseThreadWriter(options: {
+    machineId: string;
+    codexThreadId: string;
+}): Promise<CodexForceCloseWriterResult> {
+    try {
+        return await apiSocket.machineRPC<CodexForceCloseWriterResult, { codexThreadId: string }>(
+            options.machineId,
+            'codex-force-close-thread-writer',
+            { codexThreadId: options.codexThreadId },
+        );
+    } catch (error) {
+        return {
+            type: 'error',
+            errorMessage: error instanceof Error ? error.message : 'Failed to close the Codex thread writer',
         };
     }
 }

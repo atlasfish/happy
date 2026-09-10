@@ -24,6 +24,10 @@ import {
 } from '@/claude/utils/claudeSessionFork';
 import { CodexAppServerClient } from '@/codex/codexAppServerClient';
 import {
+    findCodexThreadWriterOwners,
+    forceCloseCodexThreadWriters,
+} from '@/codex/codexThreadWriter';
+import {
     CodexForkRewindPointNotFoundError,
     forkCodexThread,
     listCodexRewindPoints,
@@ -100,6 +104,10 @@ function requireNonEmptyString(value: unknown, name: string): string {
         throw new Error(`${name} is required`);
     }
     return value;
+}
+
+function isActiveWriterError(error: unknown): boolean {
+    return error instanceof Error && /already has an active writer/i.test(error.message);
 }
 
 async function withCodexAppServerClient<T>(handler: (client: CodexAppServerClient) => Promise<T>): Promise<T> {
@@ -314,6 +322,45 @@ export class ApiMachineClient {
                     nextCursor: result.nextCursor,
                 };
             });
+        });
+
+        this.rpcHandlerManager.registerHandler('codex-inspect-thread-writer', async (params: any) => {
+            const directory = requireNonEmptyString(params?.directory, 'directory');
+            const codexThreadId = requireNonEmptyString(params?.codexThreadId, 'codexThreadId');
+            if (!UUID_RE.test(codexThreadId)) {
+                throw new Error('codexThreadId must be a valid UUID');
+            }
+
+            const owners = await findCodexThreadWriterOwners(codexThreadId);
+            if (owners.length > 0) {
+                return { type: 'locked', owners };
+            }
+
+            try {
+                await withCodexAppServerClient((client) => client.resumeThread({
+                    threadId: codexThreadId,
+                    cwd: directory,
+                    mcpServers: {},
+                }));
+                return { type: 'available' };
+            } catch (error) {
+                if (isActiveWriterError(error)) {
+                    return {
+                        type: 'locked',
+                        owners: await findCodexThreadWriterOwners(codexThreadId),
+                    };
+                }
+                throw error;
+            }
+        });
+
+        this.rpcHandlerManager.registerHandler('codex-force-close-thread-writer', async (params: any) => {
+            const codexThreadId = requireNonEmptyString(params?.codexThreadId, 'codexThreadId');
+            if (!UUID_RE.test(codexThreadId)) {
+                throw new Error('codexThreadId must be a valid UUID');
+            }
+            const owners = await forceCloseCodexThreadWriters(codexThreadId);
+            return { type: 'success', owners };
         });
 
         this.rpcHandlerManager.registerHandler('codex-duplicate-thread', async (params: any) => {

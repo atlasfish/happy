@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { codexClientMethods } = vi.hoisted(() => ({
+const { codexClientMethods, writerMethods } = vi.hoisted(() => ({
     codexClientMethods: {
         connect: vi.fn(),
         disconnect: vi.fn(),
@@ -10,11 +10,17 @@ const { codexClientMethods } = vi.hoisted(() => ({
         rollbackThread: vi.fn(),
         injectItems: vi.fn(),
     },
+    writerMethods: {
+        findCodexThreadWriterOwners: vi.fn(),
+        forceCloseCodexThreadWriters: vi.fn(),
+    },
 }));
 
 vi.mock('@/codex/codexAppServerClient', () => ({
     CodexAppServerClient: vi.fn().mockImplementation(() => codexClientMethods),
 }));
+
+vi.mock('@/codex/codexThreadWriter', () => writerMethods);
 
 function machineClient() {
     return {
@@ -35,6 +41,8 @@ describe('ApiMachineClient Codex fork RPCs', () => {
         }
         codexClientMethods.connect.mockResolvedValue(undefined);
         codexClientMethods.disconnect.mockResolvedValue(undefined);
+        writerMethods.findCodexThreadWriterOwners.mockResolvedValue([]);
+        writerMethods.forceCloseCodexThreadWriters.mockResolvedValue([]);
     });
 
     it('registers a full Codex thread fork RPC', async () => {
@@ -156,6 +164,50 @@ describe('ApiMachineClient Codex fork RPCs', () => {
             threads: [{ id: 'thread-1', name: 'Saved title', preview: 'hello', cwd: '/tmp/project', updatedAt: 123 }],
             nextCursor: 'next-page',
         });
+    });
+
+    it('reports the exact application holding a Codex writer lock', async () => {
+        writerMethods.findCodexThreadWriterOwners.mockResolvedValue([{
+            pid: 32992,
+            processName: 'codex.exe',
+            appPid: 26668,
+            appName: 'Codex Desktop',
+            canForceClose: true,
+        }]);
+        const { ApiMachineClient } = await import('./apiMachine');
+        const client = new ApiMachineClient('token', machineClient());
+        client.setRPCHandlers({ spawnSession: vi.fn(), stopSession: vi.fn(), requestShutdown: vi.fn() });
+
+        const result = await handlersFrom(client).get('machine-1:codex-inspect-thread-writer')?.({
+            directory: '/tmp/project',
+            codexThreadId: '01a05792-9d44-7dc0-baec-722d9c508ef8',
+        });
+
+        expect(result).toEqual({
+            type: 'locked',
+            owners: [expect.objectContaining({ appName: 'Codex Desktop', appPid: 26668 })],
+        });
+        expect(codexClientMethods.connect).not.toHaveBeenCalled();
+    });
+
+    it('force closes only the writer resolved for the requested thread', async () => {
+        writerMethods.forceCloseCodexThreadWriters.mockResolvedValue([{
+            pid: 32992,
+            processName: 'codex.exe',
+            appPid: 26668,
+            appName: 'Codex Desktop',
+            canForceClose: true,
+        }]);
+        const { ApiMachineClient } = await import('./apiMachine');
+        const client = new ApiMachineClient('token', machineClient());
+        client.setRPCHandlers({ spawnSession: vi.fn(), stopSession: vi.fn(), requestShutdown: vi.fn() });
+
+        const result = await handlersFrom(client).get('machine-1:codex-force-close-thread-writer')?.({
+            codexThreadId: '01a05792-9d44-7dc0-baec-722d9c508ef8',
+        });
+
+        expect(writerMethods.forceCloseCodexThreadWriters).toHaveBeenCalledWith('01a05792-9d44-7dc0-baec-722d9c508ef8');
+        expect(result).toEqual({ type: 'success', owners: [expect.objectContaining({ appPid: 26668 })] });
     });
 
     it('duplicates a Codex thread by rolling back turns after the selected item', async () => {
