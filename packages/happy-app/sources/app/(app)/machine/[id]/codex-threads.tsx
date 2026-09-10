@@ -11,6 +11,8 @@ import { useNavigateToSession } from '@/hooks/useNavigateToSession';
 import { useMachine, useSessions } from '@/sync/storage';
 import { sync } from '@/sync/sync';
 import {
+    codexForceCloseThreadWriter,
+    codexInspectThreadWriter,
     codexListThreads,
     machineSpawnNewSession,
     machineStopSession,
@@ -66,36 +68,80 @@ export default function CodexThreadsScreen() {
             Modal.alert('Cannot Resume', 'This Codex thread does not contain a working directory.');
             return;
         }
-        const existing = (sessions ?? []).find((value) => (
-            typeof value !== 'string'
-            && value.metadata?.machineId === machineId
-            && value.metadata?.codexThreadId === thread.id
-            && value.presence === 'online'
-        ));
-
-        if (existing && typeof existing !== 'string') {
-            const close = await Modal.confirm(
-                'Codex Thread Already Open',
-                'This thread is already running in Happy on this computer. Close that process and resume it in a new Happy session?',
-                { cancelText: 'Cancel', confirmText: 'Close and Resume', destructive: true },
-            );
-            if (!close) return;
-            const stopped = await machineStopSession(machineId, existing.id);
-            if (!stopped.success) {
-                Modal.alert('Unable to Stop Session', stopped.message ?? 'The existing process could not be stopped.');
-                return;
-            }
-        } else {
-            const proceed = await Modal.confirm(
-                'Resume Codex Thread?',
-                'If this thread is open in Codex Desktop or VS Code, close it there first. Happy cannot safely identify and close an external Codex process. Continue?',
-                { cancelText: 'Cancel', confirmText: 'Resume' },
-            );
-            if (!proceed) return;
-        }
-
         setResumingId(thread.id);
         try {
+            const existing = (sessions ?? []).find((value) => (
+                typeof value !== 'string'
+                && value.metadata?.machineId === machineId
+                && value.metadata?.codexThreadId === thread.id
+                && value.presence === 'online'
+            ));
+
+            if (existing && typeof existing !== 'string') {
+                const close = await Modal.confirm(
+                    'Codex Thread Already Open',
+                    'This thread is already running in Happy on this computer. Close that process and resume it in a new Happy session?',
+                    { cancelText: 'Cancel', confirmText: 'Close and Resume', destructive: true },
+                );
+                if (!close) return;
+                const stopped = await machineStopSession(machineId, existing.id);
+                if (!stopped.success) {
+                    Modal.alert('Unable to Stop Session', stopped.message ?? 'The existing process could not be stopped.');
+                    return;
+                }
+                await new Promise((resolve) => setTimeout(resolve, 750));
+            }
+
+            const writer = await codexInspectThreadWriter({
+                machineId,
+                directory: thread.cwd,
+                codexThreadId: thread.id,
+            });
+            if (writer.type === 'error') {
+                Modal.alert('Unable to Check Thread', writer.errorMessage);
+                return;
+            }
+
+            if (writer.type === 'locked') {
+                const applications = [...new Set(writer.owners.map((owner) => `${owner.appName} (PID ${owner.appPid})`))];
+                if (applications.length === 0 || writer.owners.some((owner) => !owner.canForceClose)) {
+                    Modal.alert(
+                        'Codex Thread Is In Use',
+                        applications.length > 0
+                            ? `${applications.join(', ')} is using this thread and cannot be force-closed safely.`
+                            : 'Codex reports an active writer, but Happy could not identify its process safely. Close the thread on the computer and try again.',
+                    );
+                    return;
+                }
+
+                const chooseForceClose = await Modal.confirm(
+                    'Codex Thread Is In Use',
+                    `${applications.join(', ')} is currently writing to this thread. Close that application before resuming in Happy?`,
+                    { cancelText: 'Cancel', confirmText: 'Continue', destructive: true },
+                );
+                if (!chooseForceClose) return;
+
+                const confirmForceClose = await Modal.confirm(
+                    'Force Close Codex Application?',
+                    `This will forcibly terminate ${applications.join(', ')} and may interrupt its other open threads. Unsaved work could be lost.`,
+                    { cancelText: 'Keep App Open', confirmText: 'Force Close and Resume', destructive: true },
+                );
+                if (!confirmForceClose) return;
+
+                const closed = await codexForceCloseThreadWriter({ machineId, codexThreadId: thread.id });
+                if (closed.type === 'error') {
+                    Modal.alert('Unable to Close Codex', closed.errorMessage);
+                    return;
+                }
+            } else if (!existing) {
+                const proceed = await Modal.confirm(
+                    'Resume Codex Thread?',
+                    'Happy verified that this thread is not open in another local Codex process.',
+                    { cancelText: 'Cancel', confirmText: 'Resume' },
+                );
+                if (!proceed) return;
+            }
+
             const result = await machineSpawnNewSession({
                 machineId,
                 directory: thread.cwd,

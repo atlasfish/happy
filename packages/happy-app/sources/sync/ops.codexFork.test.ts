@@ -93,6 +93,33 @@ describe('codex fork ops', () => {
         expect(refreshSessions).toHaveBeenCalledTimes(1);
     });
 
+    it('inspects and force closes a Codex thread writer through machine RPC', async () => {
+        machineRPC
+            .mockResolvedValueOnce({
+                type: 'locked',
+                owners: [{ pid: 10, appPid: 5, processName: 'codex.exe', appName: 'Codex Desktop', canForceClose: true }],
+            })
+            .mockResolvedValueOnce({
+                type: 'success',
+                owners: [{ pid: 10, appPid: 5, processName: 'codex.exe', appName: 'Codex Desktop', canForceClose: true }],
+            });
+
+        const { codexForceCloseThreadWriter, codexInspectThreadWriter } = await import('./ops');
+        await expect(codexInspectThreadWriter({
+            machineId: 'machine-1', directory: '/tmp/project', codexThreadId: 'thread-1',
+        })).resolves.toMatchObject({ type: 'locked' });
+        await expect(codexForceCloseThreadWriter({
+            machineId: 'machine-1', codexThreadId: 'thread-1',
+        })).resolves.toMatchObject({ type: 'success' });
+
+        expect(machineRPC).toHaveBeenNthCalledWith(1, 'machine-1', 'codex-inspect-thread-writer', {
+            directory: '/tmp/project', codexThreadId: 'thread-1',
+        });
+        expect(machineRPC).toHaveBeenNthCalledWith(2, 'machine-1', 'codex-force-close-thread-writer', {
+            codexThreadId: 'thread-1',
+        });
+    });
+
     it('duplicates a Codex thread from a selected user item before spawning', async () => {
         machineRPC.mockImplementation(async (_machineId: string, method: string) => {
             if (method === 'codex-duplicate-thread') {
