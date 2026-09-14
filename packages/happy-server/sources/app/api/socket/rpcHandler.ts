@@ -15,6 +15,10 @@ import { Counter, Histogram, register } from 'prom-client';
 
 const RPC_ROOM_PREFIX = 'rpc:';
 const RPC_CALL_TIMEOUT_MS = 30_000;
+// Checking a historical Codex thread may need to hydrate extended history
+// before it can authoritatively report a writer lock. Keep ordinary RPCs
+// fast, but leave room for the CLI's two-minute resume check.
+const RPC_CODEX_THREAD_INSPECTION_TIMEOUT_MS = 130_000;
 const RPC_PRESENCE_POLL_MS = 2_000;
 // Timeouts for cross-replica fetchSockets during the reconnect grace window.
 // Exponential backoff: 2s → 4s → 8s. Reduces stream pressure under load
@@ -75,6 +79,12 @@ function rpcRoom(userId: string, method: string): string {
 function baseMethodName(prefixedMethod: string): string {
     const lastColon = prefixedMethod.lastIndexOf(':');
     return lastColon >= 0 ? prefixedMethod.substring(lastColon + 1) : prefixedMethod;
+}
+
+function rpcCallTimeoutMs(prefixedMethod: string): number {
+    return baseMethodName(prefixedMethod) === 'codex-inspect-thread-writer'
+        ? RPC_CODEX_THREAD_INSPECTION_TIMEOUT_MS
+        : RPC_CALL_TIMEOUT_MS;
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -216,7 +226,7 @@ export function rpcHandler(userId: string, socket: Socket, io: Server) {
             //
             // Requires 2 consecutive empty polls before declaring disconnect
             // to avoid false positives from transient Redis/adapter timeouts.
-            const ackPromise = target.timeout(RPC_CALL_TIMEOUT_MS)
+            const ackPromise = target.timeout(rpcCallTimeoutMs(method))
                 .emitWithAck('rpc-request', { method, params });
 
             let presenceAlive = true;

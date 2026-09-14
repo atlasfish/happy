@@ -3,7 +3,7 @@
  * Provides strictly typed functions for all session-related RPC operations
  */
 
-import { apiSocket } from './apiSocket';
+import { apiSocket, CODEX_THREAD_INSPECTION_ACK_TIMEOUT_MS } from './apiSocket';
 import { sync } from './sync';
 import { storage } from './storage';
 import type { AgentQuestionAnswer, MachineMetadata, SessionAgentModesPatch } from './storageTypes';
@@ -558,7 +558,7 @@ export async function codexInspectThreadWriter(options: {
         }>(options.machineId, 'codex-inspect-thread-writer', {
             directory: options.directory,
             codexThreadId: options.codexThreadId,
-        });
+        }, { timeoutMs: CODEX_THREAD_INSPECTION_ACK_TIMEOUT_MS });
     } catch (error) {
         return {
             type: 'error',
