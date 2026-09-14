@@ -52,6 +52,7 @@ export type SyncSocketListener = (state: SyncSocketState) => void;
 // Comfortably past the server's worst honest case: a 15s wait for a
 // reconnecting daemon to rejoin the room, then a 30s call.
 const RPC_ACK_TIMEOUT_MS = 50_000;
+export const CODEX_THREAD_INSPECTION_ACK_TIMEOUT_MS = 135_000;
 
 /**
  * Runs one step of an RPC and, if it throws, says which step that was.
@@ -176,7 +177,7 @@ class ApiSocket {
      * so past that the call is not slow — it is gone, and the caller deserves
      * to hear so.
      */
-    private async rpcCall(method: string, params: unknown): Promise<any> {
+    private async rpcCall(method: string, params: unknown, timeoutMs: number = RPC_ACK_TIMEOUT_MS): Promise<any> {
         // disconnect() nulls the socket, so this is a state a caller can really
         // reach. Read it once and say what happened, rather than letting a
         // property access on null surface as a TypeError.
@@ -185,7 +186,7 @@ class ApiSocket {
             throw new Error('Not connected to the server');
         }
         return await socket
-            .timeout(RPC_ACK_TIMEOUT_MS)
+            .timeout(timeoutMs)
             .emitWithAck('rpc-call', { method, params })
             .catch(() => {
                 throw new Error('The computer did not respond');
@@ -226,7 +227,7 @@ class ApiSocket {
     /**
      * RPC call for machines - uses legacy/global encryption (for now)
      */
-    async machineRPC<R, A>(machineId: string, method: string, params: A): Promise<R> {
+    async machineRPC<R, A>(machineId: string, method: string, params: A, options?: { timeoutMs?: number }): Promise<R> {
         const machineEncryption = this.encryption!.getMachineEncryption(machineId);
         if (!machineEncryption) {
             throw new Error(`Machine encryption not found for ${machineId}`);
@@ -235,6 +236,7 @@ class ApiSocket {
         const result = await this.rpcCall(
             `${machineId}:${method}`,
             await machineEncryption.encryptRaw(params),
+            options?.timeoutMs,
         );
 
         if (result.ok) {

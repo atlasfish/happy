@@ -7,6 +7,7 @@ const { machineRPC, refreshSessions } = vi.hoisted(() => ({
 
 vi.mock('./apiSocket', () => ({
     apiSocket: { machineRPC },
+    CODEX_THREAD_INSPECTION_ACK_TIMEOUT_MS: 135_000,
 }));
 
 vi.mock('./sync', () => ({
@@ -114,7 +115,7 @@ describe('codex fork ops', () => {
 
         expect(machineRPC).toHaveBeenNthCalledWith(1, 'machine-1', 'codex-inspect-thread-writer', {
             directory: '/tmp/project', codexThreadId: 'thread-1',
-        });
+        }, { timeoutMs: 135_000 });
         expect(machineRPC).toHaveBeenNthCalledWith(2, 'machine-1', 'codex-force-close-thread-writer', {
             codexThreadId: 'thread-1',
         });
