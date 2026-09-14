@@ -847,7 +847,14 @@ export class CodexAppServerClient {
             persistExtendedHistory: true,
         };
 
-        const result = await this.request('thread/resume', params) as ResumeConversationResponse;
+        // Long-running historical threads can take substantially longer than a
+        // normal app-server RPC to hydrate their persisted history and MCPs.
+        // Keep the generic RPC timeout short, but give resume enough time.
+        const result = await this.request(
+            'thread/resume',
+            params,
+            CodexAppServerClient.RESUME_REQUEST_TIMEOUT_MS,
+        ) as ResumeConversationResponse;
         this._threadId = result.thread.id;
         this._turnId = null;
         this.rawSubagentActivitySignaturesByItemId.clear();
@@ -1255,6 +1262,9 @@ export class CodexAppServerClient {
 
     /** Default timeout for RPC requests (ms). */
     private static readonly REQUEST_TIMEOUT_MS = 30_000;
+
+    /** Timeout for restoring a historical thread with extended history and MCPs (ms). */
+    private static readonly RESUME_REQUEST_TIMEOUT_MS = 2 * 60_000;
 
     private request(method: string, params?: unknown, timeoutMs?: number): Promise<unknown> {
         const timeout = timeoutMs ?? CodexAppServerClient.REQUEST_TIMEOUT_MS;
