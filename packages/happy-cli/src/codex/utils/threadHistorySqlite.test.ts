@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -15,6 +15,36 @@ afterEach(() => {
 });
 
 describe('readRecentCodexThreadHistory', () => {
+    it('prefers the current rollout over a stale SQLite history projection', () => {
+        const codexHomeDir = mkdtempSync(join(tmpdir(), 'happy-codex-rollout-'));
+        temporaryDirectories.push(codexHomeDir);
+        const sessionsDir = join(codexHomeDir, 'sessions', '2026', '09', '16');
+        mkdirSync(sessionsDir, { recursive: true });
+        const records = [
+            { ordinal: 1, type: 'event_msg', payload: { type: 'task_started', turn_id: 'old', started_at: 1 } },
+            { ordinal: 2, type: 'event_msg', payload: { type: 'item_completed', turn_id: 'old', item: { type: 'UserMessage', id: 'old-user', content: [{ type: 'text', text: 'old prompt' }] } } },
+            { ordinal: 3, type: 'event_msg', payload: { type: 'task_complete', turn_id: 'old', completed_at: 2, duration_ms: 1000 } },
+            { ordinal: 4, type: 'event_msg', payload: { type: 'task_started', turn_id: 'recent-1', started_at: 3 } },
+            { ordinal: 5, type: 'event_msg', payload: { type: 'item_completed', turn_id: 'recent-1', item: { type: 'UserMessage', id: 'recent-user-1', content: [{ type: 'text', text: 'recent prompt 1' }] } } },
+            { ordinal: 6, type: 'event_msg', payload: { type: 'item_completed', turn_id: 'recent-1', item: { type: 'AgentMessage', id: 'recent-agent-1', content: [{ type: 'Text', text: 'recent answer 1' }], phase: 'final_answer' } } },
+            { ordinal: 7, type: 'event_msg', payload: { type: 'task_complete', turn_id: 'recent-1', completed_at: 4, duration_ms: 1000 } },
+            { ordinal: 8, type: 'event_msg', payload: { type: 'task_started', turn_id: 'recent-2', started_at: 5 } },
+            { ordinal: 9, type: 'event_msg', payload: { type: 'item_completed', turn_id: 'recent-2', item: { type: 'UserMessage', id: 'recent-user-2', content: [{ type: 'text', text: 'recent prompt 2' }] } } },
+            { ordinal: 10, type: 'event_msg', payload: { type: 'task_complete', turn_id: 'recent-2', completed_at: 6, duration_ms: 1000 } },
+        ];
+        writeFileSync(
+            join(sessionsDir, 'rollout-2026-09-16T00-00-00-thread-1.jsonl'),
+            `${records.map((record) => JSON.stringify(record)).join('\n')}\n`,
+        );
+
+        const snapshot = readRecentCodexThreadHistory({ threadId: 'thread-1', turnLimit: 2, codexHomeDir });
+        expect(snapshot?.turns.map((turn) => turn.id)).toEqual(['recent-1', 'recent-2']);
+        expect(snapshot?.turns[0]?.items).toEqual([
+            { type: 'userMessage', id: 'recent-user-1', content: [{ type: 'text', text: 'recent prompt 1' }] },
+            { type: 'agentMessage', id: 'recent-agent-1', text: 'recent answer 1', phase: 'final_answer' },
+        ]);
+    });
+
     it('reads only the requested recent turns and their ordered items', () => {
         const codexHomeDir = mkdtempSync(join(tmpdir(), 'happy-codex-history-'));
         temporaryDirectories.push(codexHomeDir);
