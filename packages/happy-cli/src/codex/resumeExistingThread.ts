@@ -2,8 +2,8 @@ import { trimIdent } from '@/utils/trimIdent';
 import { randomUUID } from 'node:crypto';
 import { configuration } from '@/configuration';
 import { logger } from '@/ui/logger';
-import type { Thread } from './codexAppServerTypes';
 import { buildCodexThreadBackfillEnvelopes } from './utils/threadImageBackfill';
+import { readRecentCodexThreadHistory, type CodexThreadHistorySnapshot } from './utils/threadHistorySqlite';
 
 type ResumeThreadClient = {
     resumeThread: (opts: {
@@ -11,7 +11,6 @@ type ResumeThreadClient = {
         cwd: string;
         mcpServers: Record<string, unknown>;
     }) => Promise<{ threadId: string; model: string }>;
-    readThread: (opts: { threadId: string; includeTurns: boolean; timeoutMs?: number }) => Promise<{ thread: Thread }>;
 };
 
 type ResumeThreadSession = {
@@ -40,6 +39,7 @@ export async function resumeExistingThread(opts: {
      */
     announce?: boolean;
     backfillTurns?: number;
+    historyReader?: (options: { threadId: string; turnLimit: number }) => CodexThreadHistorySnapshot | null;
 }): Promise<{ threadId: string; model: string }> {
     try {
         const resumedThread = await opts.client.resumeThread({
@@ -60,12 +60,16 @@ export async function resumeExistingThread(opts: {
             });
 
             try {
-                const { thread } = await opts.client.readThread({
+                const backfillTurns = opts.backfillTurns ?? configuration.codexResumeBackfillTurns;
+                const history = (opts.historyReader ?? readRecentCodexThreadHistory)({
                     threadId: resumedThread.threadId,
-                    includeTurns: true,
-                    timeoutMs: 10 * 60_000,
+                    turnLimit: backfillTurns,
                 });
-                const title = thread.name?.trim();
+                if (!history) {
+                    logger.debug('[CODEX RESUME BACKFILL] Codex history database unavailable; skipped UI history replay');
+                    return resumedThread;
+                }
+                const title = history.name?.trim();
                 if (title) {
                     opts.session.sendClaudeSessionMessage({
                         type: 'summary',
@@ -75,10 +79,8 @@ export async function resumeExistingThread(opts: {
                     logger.debug(`[Codex] Synced Happy session title from resumed thread: ${title}`);
                 }
 
-                const backfillTurns = opts.backfillTurns ?? configuration.codexResumeBackfillTurns;
-                const turns = backfillTurns === 0 ? [] : (thread.turns ?? []).slice(-backfillTurns);
                 const envelopes = await buildCodexThreadBackfillEnvelopes({
-                    thread: { ...thread, turns },
+                    thread: { turns: history.turns },
                     uploadLocalImage: (attachment, imageOpts) => (
                         opts.session.uploadLocalImageAttachmentEnvelope(attachment, imageOpts)
                     ),
@@ -86,7 +88,7 @@ export async function resumeExistingThread(opts: {
                 for (const envelope of envelopes) {
                     opts.session.sendSessionProtocolMessage(envelope);
                 }
-                logger.debug(`[CODEX RESUME BACKFILL] Replayed ${envelopes.length} envelopes from ${turns.length} recent turns`);
+                logger.debug(`[CODEX RESUME BACKFILL] Replayed ${envelopes.length} envelopes from ${history.turns.length} recent turns`);
             } catch (error) {
                 logger.debug('[CODEX RESUME BACKFILL] Title/history sync failed:', error);
             }

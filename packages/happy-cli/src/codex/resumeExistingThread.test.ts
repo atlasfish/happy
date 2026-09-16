@@ -9,10 +9,8 @@ describe('resumeExistingThread', () => {
                 threadId: '019ccca2-1a77-7481-9873-de72f3464372',
                 model: 'gpt-5.4',
             }),
-            readThread: vi.fn().mockResolvedValue({
-                thread: { id: '019ccca2-1a77-7481-9873-de72f3464372', name: 'Existing Codex title', turns: [] },
-            }),
         };
+        const historyReader = vi.fn().mockReturnValue({ name: 'Existing Codex title', turns: [] });
         const metadataHandlers: Array<(metadata: any) => any> = [];
         const session = {
             updateMetadata: vi.fn((handler) => metadataHandlers.push(handler)),
@@ -32,6 +30,7 @@ describe('resumeExistingThread', () => {
             threadId: '019ccca2-1a77-7481-9873-de72f3464372',
             cwd: '/tmp/project',
             mcpServers: { happy: { command: 'happy-mcp' } },
+            historyReader,
         });
 
         expect(result).toEqual({
@@ -57,17 +56,15 @@ describe('resumeExistingThread', () => {
             type: 'summary',
             summary: 'Existing Codex title',
         }));
-        expect(client.readThread).toHaveBeenCalledWith({
+        expect(historyReader).toHaveBeenCalledWith({
             threadId: '019ccca2-1a77-7481-9873-de72f3464372',
-            includeTurns: true,
-            timeoutMs: 10 * 60_000,
+            turnLimit: 3,
         });
     });
 
     it('wraps backend resume errors with the thread ID', async () => {
         const client = {
             resumeThread: vi.fn().mockRejectedValue(new Error('thread not found')),
-            readThread: vi.fn(),
         };
         const session = {
             updateMetadata: vi.fn(),
@@ -95,12 +92,6 @@ describe('resumeExistingThread', () => {
     it('backfills only the configured number of recent turns', async () => {
         const client = {
             resumeThread: vi.fn().mockResolvedValue({ threadId: 'thread-1', model: 'gpt' }),
-            readThread: vi.fn().mockResolvedValue({
-                thread: {
-                    id: 'thread-1',
-                    turns: ['one', 'two', 'three'].map((id) => ({ id, items: [], status: 'completed' })),
-                },
-            }),
         };
         const session = {
             updateMetadata: vi.fn(),
@@ -118,6 +109,9 @@ describe('resumeExistingThread', () => {
             cwd: '/tmp/project',
             mcpServers: {},
             backfillTurns: 2,
+            historyReader: () => ({
+                turns: ['two', 'three'].map((id) => ({ id, items: [], status: 'completed' })),
+            }),
         });
 
         expect(session.sendSessionProtocolMessage).toHaveBeenCalledTimes(4);
@@ -129,7 +123,6 @@ describe('resumeExistingThread', () => {
     it('does not read or replay history for side chats', async () => {
         const client = {
             resumeThread: vi.fn().mockResolvedValue({ threadId: 'thread-1', model: 'gpt' }),
-            readThread: vi.fn(),
         };
         const session = {
             updateMetadata: vi.fn(), sendSessionEvent: vi.fn(), sendClaudeSessionMessage: vi.fn(),
@@ -139,16 +132,12 @@ describe('resumeExistingThread', () => {
             client, session, messageBuffer: { addMessage: vi.fn() }, threadId: 'thread-1', cwd: '/tmp',
             mcpServers: {}, announce: false,
         });
-        expect(client.readThread).not.toHaveBeenCalled();
         expect(session.sendSessionProtocolMessage).not.toHaveBeenCalled();
     });
 
     it('allows history backfill to be disabled while still syncing the title', async () => {
         const client = {
             resumeThread: vi.fn().mockResolvedValue({ threadId: 'thread-1', model: 'gpt' }),
-            readThread: vi.fn().mockResolvedValue({
-                thread: { id: 'thread-1', name: 'Keep this title', turns: [{ id: 'turn-1', items: [] }] },
-            }),
         };
         const session = {
             updateMetadata: vi.fn(), sendSessionEvent: vi.fn(), sendClaudeSessionMessage: vi.fn(),
@@ -157,6 +146,7 @@ describe('resumeExistingThread', () => {
         await resumeExistingThread({
             client, session, messageBuffer: { addMessage: vi.fn() }, threadId: 'thread-1', cwd: '/tmp',
             mcpServers: {}, backfillTurns: 0,
+            historyReader: () => ({ name: 'Keep this title', turns: [] }),
         });
         expect(session.sendClaudeSessionMessage).toHaveBeenCalledWith(expect.objectContaining({ summary: 'Keep this title' }));
         expect(session.sendSessionProtocolMessage).not.toHaveBeenCalled();
