@@ -11,7 +11,7 @@ type ResumeThreadClient = {
         cwd: string;
         mcpServers: Record<string, unknown>;
     }) => Promise<{ threadId: string; model: string }>;
-    readThread: (opts: { threadId: string; includeTurns: boolean }) => Promise<{ thread: Thread }>;
+    readThread: (opts: { threadId: string; includeTurns: boolean; timeoutMs?: number }) => Promise<{ thread: Thread }>;
 };
 
 type ResumeThreadSession = {
@@ -63,6 +63,7 @@ export async function resumeExistingThread(opts: {
                 const { thread } = await opts.client.readThread({
                     threadId: resumedThread.threadId,
                     includeTurns: true,
+                    timeoutMs: 10 * 60_000,
                 });
                 const title = thread.name?.trim();
                 if (title) {

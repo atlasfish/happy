@@ -909,12 +909,13 @@ export class CodexAppServerClient {
     async readThread(opts: {
         threadId: string;
         includeTurns?: boolean;
+        timeoutMs?: number;
     }): Promise<ReadConversationResponse> {
         const params: ReadConversationParams = {
             threadId: opts.threadId,
             includeTurns: opts.includeTurns ?? true,
         };
-        return await this.request('thread/read', params) as ReadConversationResponse;
+        return await this.request('thread/read', params, opts.timeoutMs) as ReadConversationResponse;
     }
 
     async listThreads(opts: { cursor?: string; limit?: number; searchTerm?: string } = {}): Promise<ThreadListResponse> {
@@ -1247,8 +1248,14 @@ export class CodexAppServerClient {
     /** Default timeout for RPC requests (ms). */
     private static readonly REQUEST_TIMEOUT_MS = 30_000;
 
+    /**
+     * Historical threads may need several minutes to hydrate their persisted
+     * extended history. Keep this separate from ordinary interactive RPCs.
+     */
+    static readonly HISTORY_REQUEST_TIMEOUT_MS = 10 * 60_000;
+
     /** Timeout for restoring a historical thread with extended history and MCPs (ms). */
-    private static readonly RESUME_REQUEST_TIMEOUT_MS = 2 * 60_000;
+    private static readonly RESUME_REQUEST_TIMEOUT_MS = CodexAppServerClient.HISTORY_REQUEST_TIMEOUT_MS;
 
     private request(method: string, params?: unknown, timeoutMs?: number): Promise<unknown> {
         const timeout = timeoutMs ?? CodexAppServerClient.REQUEST_TIMEOUT_MS;

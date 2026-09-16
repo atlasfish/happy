@@ -57,6 +57,11 @@ describe('resumeExistingThread', () => {
             type: 'summary',
             summary: 'Existing Codex title',
         }));
+        expect(client.readThread).toHaveBeenCalledWith({
+            threadId: '019ccca2-1a77-7481-9873-de72f3464372',
+            includeTurns: true,
+            timeoutMs: 10 * 60_000,
+        });
     });
 
     it('wraps backend resume errors with the thread ID', async () => {

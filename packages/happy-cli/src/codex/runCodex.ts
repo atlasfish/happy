@@ -830,19 +830,24 @@ export async function runCodex(opts: {
 
         const forkCodexThreadId = process.env.HAPPY_FORK_CODEX_THREAD_ID;
         if (opts.resumeThreadId) {
-            await resumeExistingThread({
-                client,
-                session,
-                messageBuffer,
-                threadId: opts.resumeThreadId,
-                cwd: process.cwd(),
-                mcpServers,
-                // Side chats start empty — keep the resume notice out of the UI.
-                announce: !isSideChat,
-                // Forks replay their complete source thread below. Avoid first
-                // replaying the configurable resume window as a duplicate.
-                backfillTurns: forkCodexThreadId ? 0 : undefined,
-            });
+            try {
+                await resumeExistingThread({
+                    client,
+                    session,
+                    messageBuffer,
+                    threadId: opts.resumeThreadId,
+                    cwd: process.cwd(),
+                    mcpServers,
+                    // Side chats start empty — keep the resume notice out of the UI.
+                    announce: !isSideChat,
+                    // Forks replay their complete source thread below. Avoid first
+                    // replaying the configurable resume window as a duplicate.
+                    backfillTurns: forkCodexThreadId ? 0 : undefined,
+                });
+            } catch (error) {
+                logger.debug('[codex]: Historical thread resume failed', error);
+                throw error;
+            }
             first = false;
             appendSystemPromptInjected = true;
         }
