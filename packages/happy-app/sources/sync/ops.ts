@@ -544,7 +544,6 @@ export async function codexListRewindPoints(
     }
 }
 
-<<<<<<< HEAD
 /**
  * Everything the daemon needs to revive a session it has no memory of. The
  * daemon cannot build this itself: reconnecting requires the per-session data
@@ -595,7 +594,6 @@ function buildResumeFallback(sessionId: string, machineId: string): { fallback?:
             encryptionVariant: 'dataKey',
         },
     };
-=======
 export async function codexListThreads(options: {
     machineId: string;
     cursor?: string;
@@ -617,8 +615,7 @@ export async function codexListThreads(options: {
             type: 'error',
             errorMessage: error instanceof Error ? error.message : 'Failed to list Codex threads',
         };
-    }
->>>>>>> 7b230558 (feat: add mobile Codex session controls)
+}
 }
 
 export async function codexInspectThreadWriter(options: {
