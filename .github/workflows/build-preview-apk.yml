@@ -23,6 +23,49 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  model-catalog-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.11.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check CLI and app types
+        run: |
+          pnpm --filter happy typecheck
+          pnpm --filter happy-app exec tsc --noEmit
+
+      - name: Test model catalog
+        run: |
+          pnpm --filter happy exec vitest run src/codex/codexAppServerClient.test.ts
+          pnpm --filter happy-app exec vitest run sources/components/modelModeOptions.test.ts
+
+      - name: Build CLI
+        run: pnpm --filter happy build
+
+      - name: Upload CLI build
+        uses: actions/upload-artifact@v7
+        with:
+          name: happy-cli-preview-${{ github.run_number }}
+          path: packages/happy-cli/dist/
+          if-no-files-found: error
+          retention-days: 14
+
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 90

@@ -61,6 +61,7 @@ import {
     filterPermissionModesForCli,
     getHardcodedPermissionModes,
     getHardcodedModelModes,
+    getAvailableModels,
     getEffortLevelsForModel,
     getSupportsWorktree,
     includeConfiguredModel,
@@ -68,6 +69,7 @@ import {
     type ModelMode,
     type EffortLevel,
 } from '@/components/modelModeOptions';
+import { useCodexModelCatalog } from '@/hooks/useCodexModelCatalog';
 import { isRunningOnMac } from '@/utils/platform';
 import { getNewSessionSidebarLayout } from '@/utils/newSessionSidebarLayout';
 import { getAgentPickerItems, getModePickerItems } from '@/utils/newSessionPickerItems';
@@ -931,6 +933,11 @@ function NewSessionScreen() {
         () => (sessions ?? []).filter((item): item is Session => typeof item !== 'string'),
         [sessions],
     );
+    const codexCatalog = useCodexModelCatalog(
+        selectedChoice?.happyMachine?.id,
+        selectedAgent === 'codex',
+        sessionList,
+    );
     const placeMachineIds = React.useMemo(
         () => selectedChoice?.machineIds ?? [],
         [selectedChoice],
@@ -1109,12 +1116,14 @@ function NewSessionScreen() {
         }
         : resolveAgentDefaultConfig(agentDefaultOverrides, selectedAgent, happyCliVersion), [agentDefaultOverrides, happyCliVersion, selectedAgent, rigCreation]);
     const modelModes = React.useMemo<ModelMode[]>(
-        () => rigCreation?.models ?? includeConfiguredModel(
-            selectedAgent,
-            getHardcodedModelModes(selectedAgent, t),
-            effectiveAgentDefaults.modelMode,
-        ),
-        [selectedAgent, effectiveAgentDefaults.modelMode, rigCreation],
+        () => rigCreation?.models ?? (selectedAgent === 'codex'
+            ? getAvailableModels('codex', codexCatalog, t, effectiveAgentDefaults.modelMode)
+            : includeConfiguredModel(
+                selectedAgent,
+                getHardcodedModelModes(selectedAgent, t),
+                effectiveAgentDefaults.modelMode,
+            )),
+        [selectedAgent, effectiveAgentDefaults.modelMode, rigCreation, codexCatalog],
     );
 
     const currentModel = resolveSelectedOption(modelModes, modelIndex);
@@ -1123,10 +1132,11 @@ function NewSessionScreen() {
     const effortLevels = React.useMemo<EffortLevel[]>(
         () => rigCreation
             ? rigCreation.effortsForModel(currentModelKey).map((key) => ({ key, name: key }))
-            : getEffortLevelsForModel(selectedAgent, currentModelKey),
-        [selectedAgent, currentModelKey, rigCreation],
+            : getEffortLevelsForModel(selectedAgent, currentModelKey, codexCatalog),
+        [selectedAgent, currentModelKey, rigCreation, codexCatalog],
     );
     const effectiveEffortDefault = rigCreation?.defaultEffortForModel(currentModelKey)
+        ?? codexCatalog?.models?.find((model) => model.code === currentModelKey)?.defaultThinkingLevel
         ?? effectiveAgentDefaults.effortLevel;
     const showModel = modelModes.length > 1;
     const showEffort = effortLevels.length > 0;

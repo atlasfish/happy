@@ -1,4 +1,4 @@
-import type { Metadata } from '@/sync/storageTypes';
+import type { Metadata, Session } from '@/sync/storageTypes';
 import { hackModes } from '@/sync/modeHacks';
 import { sortPermissionModes } from '@/utils/permissionModeLabels';
 import { sortRigModelsForPicker } from '@/utils/rigModelPickerOrder';
@@ -424,6 +424,16 @@ export function getAvailableModels(
         getHardcodedModelModes(flavor, translate),
         selectedKey,
     );
+}
+
+export function getCodexCatalogMetadata(sessions: readonly Session[], machineId: string | null | undefined): Metadata | null {
+    if (!machineId) return null;
+    const latest = sessions
+        .filter((session) => session.metadata?.flavor === 'codex'
+            && session.metadata.machineId === machineId
+            && session.metadata.models?.length)
+        .sort((left, right) => right.updatedAt - left.updatedAt)[0];
+    return latest?.metadata ?? null;
 }
 
 export function getAvailablePermissionModes(

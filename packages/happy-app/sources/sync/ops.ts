@@ -6,7 +6,7 @@
 import { apiSocket, CODEX_THREAD_INSPECTION_ACK_TIMEOUT_MS } from './apiSocket';
 import { sync } from './sync';
 import { storage } from './storage';
-import type { AgentQuestionAnswer, MachineMetadata, SessionAgentModesPatch } from './storageTypes';
+import type { AgentQuestionAnswer, MachineMetadata, Metadata, SessionAgentModesPatch } from './storageTypes';
 import { markAgentModePushPending, clearAgentModePushPending, type AgentModeField } from './agentModesPending';
 import {
     isRigMetadata,
@@ -261,6 +261,10 @@ export interface CodexHistoricalThread {
 
 export type CodexListThreadsResult =
     | { type: 'success'; threads: CodexHistoricalThread[]; nextCursor: string | null }
+    | { type: 'error'; errorMessage: string };
+
+export type CodexListModelsResult =
+    | { type: 'success'; models: NonNullable<Metadata['models']> }
     | { type: 'error'; errorMessage: string };
 
 export interface CodexThreadWriterOwner {
@@ -616,6 +620,19 @@ export async function codexListThreads(options: {
         return {
             type: 'error',
             errorMessage: error instanceof Error ? error.message : 'Failed to list Codex threads',
+        };
+    }
+}
+
+export async function codexListModels(machineId: string): Promise<CodexListModelsResult> {
+    try {
+        return await apiSocket.machineRPC<CodexListModelsResult, Record<string, never>>(
+            machineId, 'codex-list-models', {},
+        );
+    } catch (error) {
+        return {
+            type: 'error',
+            errorMessage: error instanceof Error ? error.message : 'Failed to list Codex models',
         };
     }
 }

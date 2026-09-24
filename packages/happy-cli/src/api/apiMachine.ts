@@ -359,6 +359,19 @@ export class ApiMachineClient {
             });
         });
 
+        this.rpcHandlerManager.registerHandler('codex-list-models', async () => {
+            return withCodexAppServerClient(async (client) => ({
+                type: 'success',
+                models: (await client.listModels()).map((model) => ({
+                    code: model.model || model.id,
+                    value: model.displayName,
+                    description: model.description || null,
+                    thinkingLevels: model.supportedReasoningEfforts.map((effort) => effort.reasoningEffort),
+                    defaultThinkingLevel: model.defaultReasoningEffort || undefined,
+                })),
+            }));
+        });
+
         this.rpcHandlerManager.registerHandler('codex-inspect-thread-writer', async (params: any) => {
             const directory = requireNonEmptyString(params?.directory, 'directory');
             const codexThreadId = requireNonEmptyString(params?.codexThreadId, 'codexThreadId');

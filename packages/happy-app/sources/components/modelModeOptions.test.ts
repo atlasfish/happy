@@ -7,6 +7,7 @@ import {
     getAgyModelModes,
     getAgyPermissionModes,
     getAvailableModels,
+    getCodexCatalogMetadata,
     getAvailablePermissionModes,
     getCodexModelModes,
     getCodexPermissionModes,
@@ -206,6 +207,17 @@ describe('modelModeOptions', () => {
             { key: 'minimal', name: 'Minimal' },
             { key: 'max', name: 'Max' },
         ]);
+    });
+
+    it('reuses the newest Codex catalog from the selected computer for new chats', () => {
+        const sessions = [
+            { updatedAt: 1, metadata: { flavor: 'codex', machineId: 'pc', models: [{ code: 'old', value: 'Old' }] } },
+            { updatedAt: 3, metadata: { flavor: 'codex', machineId: 'other', models: [{ code: 'other', value: 'Other' }] } },
+            { updatedAt: 2, metadata: { flavor: 'codex', machineId: 'pc', models: [{ code: 'new', value: 'New' }] } },
+        ] as any;
+
+        expect(getCodexCatalogMetadata(sessions, 'pc')?.models?.[0].code).toBe('new');
+        expect(getCodexCatalogMetadata(sessions, 'missing')).toBeNull();
     });
 
     it('offers claude the SDK effort union for every model', () => {

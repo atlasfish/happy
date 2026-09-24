@@ -52,6 +52,7 @@ import {
 import type { Session } from '@/sync/storageTypes';
 import {
     getEffortLevelsForModel,
+    getAvailableModels,
     getHardcodedModelModes,
     getHardcodedPermissionModes,
     filterPermissionModesForCli,
@@ -61,6 +62,7 @@ import {
     truncateModelLabel,
     type ModeOption,
 } from './modelModeOptions';
+import { useCodexModelCatalog } from '@/hooks/useCodexModelCatalog';
 import type { NewSessionAgentType } from '@/sync/persistence';
 import { useImagePicker } from '@/hooks/useImagePicker';
 import { Modal } from '@/modal';
@@ -869,6 +871,11 @@ export const HomeDock = React.memo(({
         () => (sessions ?? []).filter((item): item is Session => typeof item !== 'string'),
         [sessions],
     );
+    const codexCatalog = useCodexModelCatalog(
+        selectedChoice?.happyMachine?.id,
+        agentType === 'codex',
+        sessionList,
+    );
     const places = React.useMemo(
         () => collectSessionPlaces({
             machineIds: placeMachineIds,
@@ -1047,12 +1054,14 @@ export const HomeDock = React.memo(({
         [agentType, happyCliVersion, rigCreation],
     );
     const modelOptions = React.useMemo(
-        () => rigCreation?.models ?? includeConfiguredModel(
-            agentType,
-            getHardcodedModelModes(agentType, t),
-            defaults.modelMode,
-        ),
-        [agentType, defaults.modelMode, rigCreation],
+        () => rigCreation?.models ?? (agentType === 'codex'
+            ? getAvailableModels('codex', codexCatalog, t, defaults.modelMode)
+            : includeConfiguredModel(
+                agentType,
+                getHardcodedModelModes(agentType, t),
+                defaults.modelMode,
+            )),
+        [agentType, defaults.modelMode, rigCreation, codexCatalog],
     );
     // The code default last: when the saved and configured modes were both
     // filtered out for an old CLI, land there rather than on whichever mode
@@ -1066,10 +1075,11 @@ export const HomeDock = React.memo(({
     const effortOptions = React.useMemo(
         () => rigCreation
             ? rigCreation.effortsForModel(currentModel?.key).map((key) => ({ key, name: key }))
-            : getEffortLevelsForModel(agentType, currentModel?.key ?? 'default'),
-        [agentType, currentModel?.key, rigCreation],
+            : getEffortLevelsForModel(agentType, currentModel?.key ?? 'default', codexCatalog),
+        [agentType, currentModel?.key, rigCreation, codexCatalog],
     );
     const currentEffortDefault = rigCreation?.defaultEffortForModel(currentModel?.key)
+        ?? codexCatalog?.models?.find((model) => model.code === currentModel?.key)?.defaultThinkingLevel
         ?? defaults.effortLevel;
     const currentEffort = resolveOption(effortOptions, [effortLevel, currentEffortDefault]);
     const currentAgent = availableAgents.find((agent) => agent.key === agentType)
