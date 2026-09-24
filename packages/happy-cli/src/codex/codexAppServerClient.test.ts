@@ -138,6 +138,33 @@ describe('CodexAppServerClient sandbox integration', () => {
         expect(new CodexAppServerClient().supportsGoalActions()).toBe(false);
     });
 
+    it('collects every visible model page from Codex', async () => {
+        const requests: MockRpcMessage[] = [];
+        mockSpawn.mockImplementation(() => createMockProcess({
+            onRequest: (msg, stdout) => {
+                if (msg.method !== 'model/list') return;
+                requests.push(msg);
+                pushJsonLine(stdout, { id: msg.id, result: msg.params.cursor
+                    ? { data: [{ id: 'model-2', model: 'model-2' }], nextCursor: null }
+                    : { data: [{ id: 'model-1', model: 'model-1' }], nextCursor: 'next' },
+                });
+            },
+        }));
+
+        const { CodexAppServerClient } = await import('./codexAppServerClient');
+        const client = new CodexAppServerClient();
+        try {
+            await client.connect();
+            expect((await client.listModels()).map((model) => model.model)).toEqual(['model-1', 'model-2']);
+            expect(requests.map((request) => request.params)).toEqual([
+                { cursor: null, limit: 100, includeHidden: false },
+                { cursor: 'next', limit: 100, includeHidden: false },
+            ]);
+        } finally {
+            await client.disconnect();
+        }
+    });
+
     it('wraps transport when sandbox is enabled', async () => {
         // Dynamic import to ensure mocks are applied
         const { CodexAppServerClient } = await import('./codexAppServerClient');

@@ -594,6 +594,8 @@ function buildResumeFallback(sessionId: string, machineId: string): { fallback?:
             encryptionVariant: 'dataKey',
         },
     };
+}
+
 export async function codexListThreads(options: {
     machineId: string;
     cursor?: string;
@@ -615,7 +617,7 @@ export async function codexListThreads(options: {
             type: 'error',
             errorMessage: error instanceof Error ? error.message : 'Failed to list Codex threads',
         };
-}
+    }
 }
 
 export async function codexInspectThreadWriter(options: {

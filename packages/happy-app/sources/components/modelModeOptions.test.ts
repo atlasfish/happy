@@ -192,6 +192,22 @@ describe('modelModeOptions', () => {
         expect(keys).toEqual(['low', 'medium', 'high', 'xhigh']);
     });
 
+    it('uses the Codex model catalog effort levels for a newly available model', () => {
+        const metadata = {
+            models: [{
+                code: 'future-model',
+                value: 'Future Model',
+                thinkingLevels: ['minimal', 'max'],
+                defaultThinkingLevel: 'max',
+            }],
+        } as any;
+
+        expect(getEffortLevelsForModel('codex', 'future-model', metadata)).toEqual([
+            { key: 'minimal', name: 'Minimal' },
+            { key: 'max', name: 'Max' },
+        ]);
+    });
+
     it('offers claude the SDK effort union for every model', () => {
         // Claude's scale belongs to the SDK, not the model: an unreachable level
         // is silently downgraded, so every model gets the same list.

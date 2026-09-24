@@ -29,6 +29,9 @@ import type {
     ReadConversationResponse,
     ThreadListParams,
     ThreadListResponse,
+    CodexModel,
+    ModelListParams,
+    ModelListResponse,
     RollbackConversationParams,
     RollbackConversationResponse,
     InjectItemsParams,
@@ -929,6 +932,20 @@ export class CodexAppServerClient {
             searchTerm: opts.searchTerm ?? null,
         };
         return await this.request('thread/list', params) as ThreadListResponse;
+    }
+
+    async listModels(): Promise<CodexModel[]> {
+        const models: CodexModel[] = [];
+        let cursor: string | null = null;
+
+        do {
+            const params: ModelListParams = { cursor, limit: 100, includeHidden: false };
+            const page = await this.request('model/list', params, 10_000) as ModelListResponse;
+            models.push(...page.data);
+            cursor = page.nextCursor ?? null;
+        } while (cursor);
+
+        return models;
     }
 
     async rollbackThread(opts: {

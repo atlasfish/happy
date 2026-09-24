@@ -828,6 +828,25 @@ export async function runCodex(opts: {
         await client.connect();
         logger.debug('[codex]: client.connect done');
 
+        try {
+            const models = await client.listModels();
+            if (models.length > 0) {
+                session.updateMetadata((currentMetadata) => ({
+                    ...currentMetadata,
+                    models: models.map((model) => ({
+                        code: model.model || model.id,
+                        value: model.displayName,
+                        description: model.description || null,
+                        thinkingLevels: model.supportedReasoningEfforts.map((effort) => effort.reasoningEffort),
+                        defaultThinkingLevel: model.defaultReasoningEffort || undefined,
+                    })),
+                    currentModelCode: opts.model ?? DEFAULT_CODEX_MODEL,
+                }));
+            }
+        } catch (error) {
+            logger.debug('[Codex] Failed to synchronize model catalog', error);
+        }
+
         const forkCodexThreadId = process.env.HAPPY_FORK_CODEX_THREAD_ID;
         if (opts.resumeThreadId) {
             try {

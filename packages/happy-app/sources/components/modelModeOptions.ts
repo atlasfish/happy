@@ -594,6 +594,10 @@ export function getEffortLevelsForModel(
         return getClaudeEffortLevels();
     }
     if (flavor === 'codex') {
+        const metadataModel = metadata?.models?.find((model) => model.code === modelKey);
+        if (metadataModel?.thinkingLevels?.length) {
+            return effortLevels(metadataModel.thinkingLevels);
+        }
         return getCodexEffortLevels(modelKey);
     }
     if (flavor === 'agy') {

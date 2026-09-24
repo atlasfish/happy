@@ -5,6 +5,22 @@
 
 export type ThreadId = string;
 
+// --- Model catalog ---
+
+export type CodexModel = {
+    id: string;
+    model: string;
+    displayName: string;
+    description: string;
+    isDefault: boolean;
+    hidden: boolean;
+    defaultReasoningEffort: string;
+    supportedReasoningEfforts: Array<{ reasoningEffort: string; description: string }>;
+};
+
+export type ModelListParams = { cursor?: string | null; limit?: number | null; includeHidden?: boolean | null };
+export type ModelListResponse = { data: CodexModel[]; nextCursor?: string | null };
+
 // --- Initialize ---
 
 export type InitializeParams = {
