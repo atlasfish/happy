@@ -1,7 +1,7 @@
 import { Ionicons, Octicons } from '@expo/vector-icons';
 import Svg, { Circle } from 'react-native-svg';
 import * as React from 'react';
-import { Keyboard, View, Platform, Text, ActivityIndicator, Pressable, TouchableWithoutFeedback, LayoutChangeEvent } from 'react-native';
+import { Dimensions, Keyboard, View, Platform, Text, ActivityIndicator, Pressable, TouchableWithoutFeedback, LayoutChangeEvent, Modal, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { AgentInputAttachmentStrip } from './AgentInputAttachmentStrip';
 import type { AttachmentPreview } from '@/sync/attachmentTypes';
@@ -46,6 +46,7 @@ import {
     resolveMobileComposerMiddleGeometry,
 } from './agentInputLayout';
 import { shouldUseExpoNativeSettingsMenu } from './glassInteractionPolicy';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Drops bubble through document once per mounted composer. A WeakSet keeps a
 // background drop from being accepted by multiple visible composers without
@@ -1164,6 +1165,12 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
     // visible, including while we dismiss the keyboard on mobile.
     type ComposerPicker = 'permission' | 'model' | 'effort';
     const [openPicker, setOpenPicker] = React.useState<ComposerPicker | null>(null);
+    const pickerAnchorRef = React.useRef<View>(null);
+    const [pickerAnchorY, setPickerAnchorY] = React.useState<number | null>(null);
+    const { height: windowHeight } = useWindowDimensions();
+    // The translucent Android modal includes the status and navigation bars.
+    const screenHeight = Platform.OS === 'android' ? Dimensions.get('screen').height : windowHeight;
+    const safeArea = useSafeAreaInsets();
     const pickerOpeningRef = React.useRef<ComposerPicker | null>(null);
     const pickerKeyboardSubscriptionRef = React.useRef<ReturnType<typeof Keyboard.addListener> | null>(null);
     const pickerOpenTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1181,7 +1188,19 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
     const closePicker = React.useCallback(() => {
         cancelPendingPickerOpen();
         setOpenPicker(null);
+        setPickerAnchorY(null);
     }, [cancelPendingPickerOpen]);
+
+    const openPickerAtAnchor = React.useCallback((picker: ComposerPicker) => {
+        if (!compactMobileComposer) {
+            setOpenPicker(picker);
+            return;
+        }
+        pickerAnchorRef.current?.measureInWindow((_x, y) => {
+            setPickerAnchorY(y);
+            setOpenPicker(picker);
+        });
+    }, [compactMobileComposer]);
 
     React.useEffect(() => cancelPendingPickerOpen, [cancelPendingPickerOpen]);
 
@@ -1194,7 +1213,7 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
 
         closePicker();
         if (Platform.OS === 'web' || !Keyboard.isVisible()) {
-            setOpenPicker(picker);
+            openPickerAtAnchor(picker);
             return;
         }
 
@@ -1203,14 +1222,14 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
             const pickerToOpen = pickerOpeningRef.current;
             cancelPendingPickerOpen();
             if (pickerToOpen) {
-                setOpenPicker(pickerToOpen);
+                openPickerAtAnchor(pickerToOpen);
             }
         };
         pickerKeyboardSubscriptionRef.current = Keyboard.addListener('keyboardDidHide', finishOpening);
         pickerOpenTimerRef.current = setTimeout(finishOpening, 420);
         inputRef.current?.blur();
         Keyboard.dismiss();
-    }, [cancelPendingPickerOpen, closePicker, openPicker]);
+    }, [cancelPendingPickerOpen, closePicker, openPicker, openPickerAtAnchor]);
 
     const handleSettingsPress = React.useCallback(() => {
         handlePickerPress('permission');
@@ -1815,7 +1834,7 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
             styles.container,
             { paddingHorizontal: screenWidth > 700 ? 12 : 8 }
         ]}>
-            <View style={[
+            <View ref={pickerAnchorRef} style={[
                 styles.innerContainer,
                 { maxWidth: layout.maxWidth }
             ]}>
@@ -1840,18 +1859,34 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
                 {desktopSettingsOverlay}
 
                 {/* Permission, model, and effort pickers open independently
-                    from their matching controls in the compact composer action row. */}
+                    from their matching controls in the compact composer action row.
+                    A modal keeps the list inside the Android touch target even
+                    though it is drawn above the composer's own bounds. */}
                 {compactMobileComposer && !useNativeSettingsMenus && openPicker && (
-                    <>
+                    <Modal
+                        transparent
+                        visible
+                        statusBarTranslucent
+                        navigationBarTranslucent
+                        animationType="none"
+                        onRequestClose={closePicker}
+                    >
                         <AnimatedClickAwayBackdrop
                             onPress={closePicker}
-                            style={styles.overlayBackdrop}
+                            style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
                         />
                         <View style={[
                             styles.settingsOverlay,
-                            { paddingHorizontal: screenWidth > 700 ? 0 : 16 }
+                            {
+                                bottom: Math.max(0, screenHeight - (pickerAnchorY ?? screenHeight)) + 12,
+                                marginBottom: 0,
+                                paddingHorizontal: screenWidth > 700 ? 0 : 16,
+                            }
                         ]}>
-                            <FloatingOverlay maxHeight={400} keyboardShouldPersistTaps="always">
+                            <FloatingOverlay
+                                maxHeight={Math.max(80, Math.min(400, (pickerAnchorY ?? screenHeight) - safeArea.top - 24))}
+                                keyboardShouldPersistTaps="always"
+                            >
                                 {openPicker === 'permission' ? (
                                     <View style={styles.overlaySection}>
                                         <Text style={styles.overlaySectionTitle}>
@@ -2104,7 +2139,7 @@ export const AgentInput = React.memo(React.forwardRef<MultiTextInputHandle, Agen
                                 )}
                             </FloatingOverlay>
                         </View>
-                    </>
+                    </Modal>
                 )}
 
                 <AnimatedFade visible={props.showStatusDetails !== false}>
